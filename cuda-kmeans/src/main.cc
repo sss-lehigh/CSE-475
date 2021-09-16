@@ -2,6 +2,7 @@
 #include <string>
 #include <unistd.h>
 #include "kmeans.h"
+#include "utils.h"
 
 using namespace std;
 

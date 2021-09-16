@@ -8,6 +8,7 @@
 #include <time.h>
 #include "kernels.h"
 #include "kmeans.h"
+#include "utils.h"
 
 #define M_THREADS 1024
 #define U_THREADS 1024
