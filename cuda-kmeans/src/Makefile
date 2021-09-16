@@ -24,8 +24,11 @@ OBJ = $(CXXOBJ) $(CUDAOBJ)
 all: CXXFLAGS += -O3
 all: CUFLAGS += -O3 -Xptxas -dlcm=ca
 all: BUILD_TYPE = Release
-all: $(TARGET)
+all: obj $(TARGET)
 	@echo "Done"
+
+obj:
+	@mkdir obj
 
 debug: CXXFLAGS += -O0 -Wall 
 debug: CUFLAGS += -G

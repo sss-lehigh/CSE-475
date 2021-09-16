@@ -2,7 +2,6 @@
 #include <string>
 #include <unistd.h>
 #include "kmeans.h"
-#include "kmcuda.h"
 
 using namespace std;
 
