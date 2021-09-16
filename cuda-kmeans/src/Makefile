@@ -39,7 +39,7 @@ debug: $(TARGET)
 
 $(ODIR)/%.cc.o: %.cc $(IFILES)
 	@echo $< " --> " $@ "["$(BUILD_TYPE)"]"
-	@$(CXX) -c $(CXXFLAGS) $(SHAREDFLAGS) $(IFLAGS) $(LFLAGS) $(LIBS) -o $@ $< 
+	@$(CXX) -c $(CXXFLAGS) $(SHAREDFLAGS) $(IFLAGS) -o $@ $< 
 
 $(ODIR)/%.cu.o: %.cu $(IFILES)
 	@echo $< " --> " $@ "["$(BUILD_TYPE)"]"
@@ -47,7 +47,7 @@ $(ODIR)/%.cu.o: %.cu $(IFILES)
 
 $(TARGET): $(OBJ)
 	@echo "Linking object files..." $(LFLAGS) 
-	@$(CUDA) -L$(LDIR) $(LIBS) $(OBJ) -o $@ $(CUFLAGS) 
+	@$(CUDA) $(OBJ) -o $@ $(CUFLAGS) 
 
 .PHONY: clean
 
