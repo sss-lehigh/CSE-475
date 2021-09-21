@@ -28,7 +28,8 @@ std::string getAlgoString(int);
 
 int cuda_kmeans(int algo, int k, data_t* d, int threads) {
         // init clusters...
-	float* h_data;
+    // host memory
+    float* h_data;
 	float* h_clusters;
 	float* h_distances;
 	int* h_assignments;
@@ -37,6 +38,7 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 	int* h_locks;
 	int* h_fg_locks;
 
+    // kernel memory
 	float* data;
 	float* clusters;
 	float* distances;
@@ -46,6 +48,7 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 	int* locks;
 	int* fg_locks;
 
+    // allocate pinned memory on host
 	gpuErrchk(cudaMallocHost(&h_data, sizeof(float) * d->numPoints * d->numAttrs));
 	gpuErrchk(cudaMallocHost(&h_clusters, sizeof(float) * k * d->numAttrs));
 	gpuErrchk(cudaMallocHost(&h_distances, sizeof(float) * d->numPoints));
@@ -55,6 +58,7 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 	gpuErrchk(cudaMallocHost(&h_locks, sizeof(int) * k));
 	gpuErrchk(cudaMallocHost(&h_fg_locks, sizeof(int) * k * d->numAttrs));
 
+    // allocate memory on GPU
 	gpuErrchk(cudaMalloc(&data, sizeof(float) * d->numPoints * d->numAttrs));
 	gpuErrchk(cudaMalloc(&clusters, sizeof(float) * k * d->numAttrs));
 	gpuErrchk(cudaMalloc(&distances, sizeof(float) * d->numPoints));
@@ -64,14 +68,8 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 	gpuErrchk(cudaMalloc(&locks, sizeof(int) * k));
 	gpuErrchk(cudaMalloc(&fg_locks, sizeof(int) * k * d->numAttrs));
 
-//  gpuErrchk(cudaMallocManaged(&data, sizeof(float) * d->numPoints * d->numAttrs));
-//  gpuErrchk(cudaMallocManaged(&clusters, sizeof(float) * k * d->numAttrs));
-//  gpuErrchk(cudaMallocManaged(&distances, sizeof(float) * d->numPoints));
-//  gpuErrchk(cudaMallocManaged(&assignments, sizeof(int) * d->numPoints));
-//  gpuErrchk(cudaMallocManaged(&assignments_prev, sizeof(int) * d->numPoints));
-//  gpuErrchk(cudaMallocManaged(&nmembers, sizeof(int) * k));
-//  gpuErrchk(cudaMallocManaged(&locks, sizeof(int) * k));
 
+    // intitialize memory on host
 	for (int i = 0; i < d->numPoints; ++i) {
 		for (int j = 0; j < d->numAttrs; ++j) {
 			h_data[i * d->numAttrs + j] = d->data[i][j];
@@ -96,6 +94,7 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 		h_assignments_prev[i] = -1;
 	}
 
+    // asynch. memory copy to device
 	gpuErrchk(
 			cudaMemcpyAsync(data, h_data, sizeof(float) * d->numPoints * d->numAttrs,
 					cudaMemcpyHostToDevice));
@@ -128,8 +127,6 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 	int u_threads = 0, u_blocks = 0, u_chunk = 0, u_sharedmem = 0;
 	u_threads = threads;
 	setUpdateParameters(algo, d, k, u_threads, u_blocks, u_chunk, u_sharedmem);
-	//printf("%d\n", u_chunk);
-	//if(u_chunk != 0) printf("%d\n", (k / u_chunk) + 1);
 
 	// setup threads and blocks for the cluster reset kernel
 	int r_threads = 0, r_blocks = 0;
@@ -151,9 +148,6 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 		*update = 0;
 
 		// assign each datapoint to a cluster
-                // find_membership<<<m_blocks, m_threads, m_sharedmem>>>(data, d->numPoints,
-                //                 d->numAttrs, clusters, k, m_chunk, assignments, assignments_prev,
-                //                 update);
 		find_membership_global<<<m_blocks, m_threads>>>(data, d->numPoints,
 				d->numAttrs, clusters, k, assignments, assignments_prev,
 				update);
@@ -168,8 +162,11 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 				cudaMemcpyAsync(h_assignments_prev, assignments_prev,
 						sizeof(int) * d->numPoints, cudaMemcpyDeviceToHost));
 
+        // synchronize host and device
 		gpuErrchk(cudaDeviceSynchronize());
-		for(int i = 0; i < d->numPoints; ++i) {
+		
+        // count points that have been reassigned clusters
+        for(int i = 0; i < d->numPoints; ++i) {
 			 if(h_assignments[i] != h_assignments_prev[i]) ++reassignments;
 		}
 
@@ -197,44 +194,44 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 			// cluster update
 			switch (algo) {
 			case GM_CT:
-                                clock_gettime(CLOCK_REALTIME, &cstart);
+                clock_gettime(CLOCK_REALTIME, &cstart);
 				update_clusters_gmct<<<u_blocks, u_threads, u_sharedmem>>>(const_data, vol_clusters,
 						vol_nmembers, k, d->numPoints, d->numAttrs, const_ass, const_ass_prev,
 						locks);
 				gpuErrchk(cudaDeviceSynchronize())
-			        normalize_clusters<<<r_blocks, r_threads>>>(clusters, nmembers, k, d->numAttrs);
+			    normalize_clusters<<<r_blocks, r_threads>>>(clusters, nmembers, k, d->numAttrs);
 				gpuErrchk(cudaDeviceSynchronize())
-                                clock_gettime(CLOCK_REALTIME, &cend);
+                clock_gettime(CLOCK_REALTIME, &cend);
 				break;
 			case GM_DT:
-                                clock_gettime(CLOCK_REALTIME, &cstart);
+                clock_gettime(CLOCK_REALTIME, &cstart);
 				update_clusters_gmdt<<<u_blocks, u_threads, u_sharedmem>>>(const_data, vol_clusters,
 						vol_nmembers, k, d->numPoints, d->numAttrs, const_ass, const_ass_prev,
 						locks);
 				gpuErrchk(cudaDeviceSynchronize())
-			  normalize_clusters<<<r_blocks, r_threads>>>(clusters, nmembers, k, d->numAttrs);
+			    normalize_clusters<<<r_blocks, r_threads>>>(clusters, nmembers, k, d->numAttrs);
 				gpuErrchk(cudaDeviceSynchronize())
-                                clock_gettime(CLOCK_REALTIME, &cend);
+                clock_gettime(CLOCK_REALTIME, &cend);
 				break;
 			case SM_CT:
-                                clock_gettime(CLOCK_REALTIME, &cstart);
+                clock_gettime(CLOCK_REALTIME, &cstart);
 				update_clusters_smct<<<u_blocks, u_threads, u_sharedmem>>>(
 						const_data, clusters, nmembers, k, u_chunk, d->numPoints, d->numAttrs, const_ass,
 						const_ass_prev, locks);
 				gpuErrchk(cudaDeviceSynchronize())
-			        normalize_clusters<<<r_blocks, r_threads>>>(clusters, nmembers, k, d->numAttrs);
+			    normalize_clusters<<<r_blocks, r_threads>>>(clusters, nmembers, k, d->numAttrs);
 				gpuErrchk(cudaDeviceSynchronize())
-                                clock_gettime(CLOCK_REALTIME, &cend);
+                clock_gettime(CLOCK_REALTIME, &cend);
 				break;
 			case SM_DT:
-                                clock_gettime(CLOCK_REALTIME, &cstart);
+                clock_gettime(CLOCK_REALTIME, &cstart);
 				update_clusters_smdt<<<u_blocks, u_threads, u_sharedmem>>>(
 						const_data, clusters, nmembers, k, u_chunk, d->numPoints, d->numAttrs, const_ass,
 						const_ass_prev, locks);
 				gpuErrchk(cudaDeviceSynchronize())
-			  normalize_clusters<<<r_blocks, r_threads>>>(clusters, nmembers, k, d->numAttrs);
+			    normalize_clusters<<<r_blocks, r_threads>>>(clusters, nmembers, k, d->numAttrs);
 				gpuErrchk(cudaDeviceSynchronize())
-                                clock_gettime(CLOCK_REALTIME, &cend);
+                clock_gettime(CLOCK_REALTIME, &cend);
 				break;
 			}
 
@@ -243,7 +240,7 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 
 			// calculate run times
 			auto g_stop = std::chrono::high_resolution_clock::now();
-                        iter_runtime = (cend.tv_sec - cstart.tv_sec) * 1000000000 + (cend.tv_nsec - cstart.tv_nsec);
+            iter_runtime = (cend.tv_sec - cstart.tv_sec) * 1000000000 + (cend.tv_nsec - cstart.tv_nsec);
 			avg_runtime += iter_runtime; 
 			total_runtime += g_stop - g_start;
 		}
@@ -263,16 +260,13 @@ int cuda_kmeans(int algo, int k, data_t* d, int threads) {
 			exit(1);
 		}
 
-                //printf("%d\t%lu\n", reassignments, iter_runtime);
 	} while (!done && ++loop < 500);
 
 	float tot_rt = total_runtime.count();
 	long double updt_rt = ((long double)(avg_runtime) / loop) / 1000000;
 
-//	gpuErrchk(
-//			cudaMemcpy(h_clusters, clusters, sizeof(float) * k * d->numAttrs,
-//					cudaMemcpyDeviceToHost))
 	std::string algoString = getAlgoString(algo);
+    // print results
 	std::printf("%s\t%d\t%f\t%LF\t%d\t%d\t%d\t%d\n", algoString.c_str(), k, tot_rt, updt_rt,
 			loop, u_threads, u_blocks, u_sharedmem);
 	return 1;
@@ -287,6 +281,7 @@ void setFindMembershipParameters(data_t* d, int k, int& m_threads, int& m_blocks
 	m_sharedmem = sizeof(float) * (d->numAttrs * m_chunk);
 }
 
+// calculate how many blocks we need
 void setUpdateParameters(int algo, data_t* d, int k, int& u_threads, int& u_blocks, int& u_chunk, int& u_sharedmem){
 	int need;
 	switch (algo) {

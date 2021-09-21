@@ -11,7 +11,6 @@ int main(int argc, char** argv) {
   int c = -1;
   int x = -1;
   int t = -1; 
-  int s = -1;
   int iters = 1;
   int o;
   while ((o = getopt(argc, argv, "c:f:x:t:s:i:")) != -1) {
@@ -27,9 +26,6 @@ int main(int argc, char** argv) {
         break;
       case 't':
         t = atoi(optarg);
-        break;
-      case 's':
-        s = atoi(optarg);
         break;
       case 'i':
         iters = atoi(optarg);
