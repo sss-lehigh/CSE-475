@@ -27,17 +27,13 @@ The memory type denotes where intermediate data is stored when operating.
 
 The data files need to be formated as follows:
 
-1. number of object
-2. number of attributes
-3. whitespace seperated data
+\<point number> \<dim 1 value> \<dim 2 value> ... \<dim n value>
 
 For example:
 
 ```{text}
-2
-2
-1.0 2.0
-0.0 -1.0
+1 1.0 2.0
+2 0.0 -1.0
 ```
 
 ## Headers and Sources
